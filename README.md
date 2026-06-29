@@ -38,16 +38,34 @@ npm run dev          # server :4000 + web :5173 (concurrently)
 Open http://localhost:5173 — pick a side and start tapping. Open a second tab to
 feel two fans fuse into one canvas. Runs with **no credentials** in simulated mode.
 
-### Switch to the live TxLINE feed
+### Switch to the live TxLINE feed (devnet — free)
+
+One-time wallet setup, then one command does the whole subscribe → activate flow:
 
 ```bash
+# 1. A funded Solana devnet wallet (free)
+solana-keygen new --outfile ~/pulse-devnet.json
+solana config set --url devnet
+solana airdrop 2
+
+# 2. Config
 cp server/.env.example server/.env
-# set FEED_MODE=live and fill TXLINE_JWT + TXLINE_API_TOKEN
+#    set TXLINE_WALLET_KEYPAIR=~/pulse-devnet.json  (NETWORK=devnet is the default)
+
+# 3. Subscribe (Service Level 12, real-time, no TxL tokens) + activate the API token
+npm run setup:txline -w @pulse/server
+#    → prints FEED_MODE=live / TXLINE_JWT / TXLINE_API_TOKEN — paste them into server/.env
+
+# 4. Run live
+npm run dev
 ```
 
-The token comes from the documented flow: `POST /auth/guest/start` → subscribe
-on Solana to **Service Level 12** (World Cup + Int Friendlies, real-time) →
-`POST /api/token/activate`. Payload mapping lives in `server/src/txline/ingest.ts`.
+The flow (from the TxLINE World Cup docs):
+`POST /auth/guest/start` → `program.subscribe(12, 4 weeks)` on the devnet program
+`6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J` → `POST /api/token/activate`
+(signs `txSig:leagues:jwt` with the wallet). Devnet API base is
+`https://txline-dev.txodds.com`. The onboarding script is
+`server/src/txline/onboarding.ts`; live SSE payload mapping is `server/src/txline/ingest.ts`.
 
 ## Layout
 
