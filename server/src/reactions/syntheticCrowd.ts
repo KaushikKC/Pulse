@@ -22,6 +22,8 @@ export class SyntheticCrowd {
   constructor(
     private readonly aggregator: ReactionAggregator,
     private readonly fixtureIds: () => string[],
+    /** Only animate rooms someone is actually watching (0 = animate all). */
+    private readonly presenceOf: (fixtureId: string) => number = () => 1,
   ) {}
 
   start(): void {
@@ -48,9 +50,15 @@ export class SyntheticCrowd {
 
   private tick(): void {
     for (const fixtureId of this.fixtureIds()) {
+      // Skip rooms nobody is in, so live mode doesn't animate 19 idle fixtures.
+      if (this.presenceOf(fixtureId) === 0) {
+        this.excitement.set(fixtureId, (this.excitement.get(fixtureId) ?? 0) * 0.9);
+        continue;
+      }
       const ex = this.excitement.get(fixtureId) ?? 0;
-      // Ambient base + excitement-scaled chatter.
-      const taps = Math.round(2 + ex * 10);
+      // Light ambient chatter at idle (room feels alive but calm); excitement
+      // from real events scales it up so goals stand out as genuine spikes.
+      const taps = Math.round(ex * 12) + (Math.random() < 0.45 ? 1 : 0);
       for (let i = 0; i < taps; i++) {
         const team: Side = Math.random() < 0.5 ? 1 : 2;
         const type = REACTIONS[Math.floor(Math.random() * REACTIONS.length)];
