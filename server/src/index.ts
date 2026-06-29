@@ -16,6 +16,7 @@ import { bus } from "./bus.js";
 import { detector } from "./events/detector.js";
 import { Simulator } from "./txline/simulator.js";
 import { TxLineIngest } from "./txline/ingest.js";
+import { fetchFixturesSnapshot, fixtureRegistry } from "./txline/fixtures.js";
 import { ReactionAggregator } from "./reactions/aggregator.js";
 import { SyntheticCrowd } from "./reactions/syntheticCrowd.js";
 import { roomManager } from "./rooms/roomManager.js";
@@ -74,30 +75,41 @@ bus.on("room_state", (state: RoomState) => {
 
 // Feed source.
 if (config.feedMode === "live") {
+  // Populate the match list + team-name registry from the fixtures snapshot,
+  // then open the SSE stream. Without this the lobby has nothing to join.
+  fetchFixturesSnapshot()
+    .then((fixtures) => {
+      fixtureRegistry.setAll(fixtures);
+      knownFixtures = fixtures.map((f) => ({
+        fixtureId: f.fixtureId,
+        participants: f.participants,
+        phase: 1,
+        live: true,
+      }));
+      console.log(`[pulse] loaded ${knownFixtures.length} fixtures from snapshot`);
+    })
+    .catch((err) => console.warn("[pulse] fixtures snapshot failed:", err.message));
+
   const ingest = new TxLineIngest();
   ingest.start();
-  // Live fixtures would come from /api/fixtures/snapshot; expose what we learn.
-  bus.on("room_state", (s) => {
-    if (!knownFixtures.find((f) => f.fixtureId === s.fixtureId)) {
-      knownFixtures.push({
-        fixtureId: s.fixtureId,
-        participants: s.participants,
-        phase: s.phase,
-        live: true,
-      });
-    }
-  });
   console.log("[pulse] feed mode: LIVE (TxLINE SSE)");
 } else {
   const sim = new Simulator();
   knownFixtures = sim.fixtures();
   sim.start();
+  console.log("[pulse] feed mode: SIM (simulated crowd + replay)");
+}
 
-  // Synthetic crowd so the room always looks alive (top demo risk mitigation).
-  const crowd = new SyntheticCrowd(aggregator, () => knownFixtures.map((f) => f.fixtureId));
+// Synthetic crowd keeps any joined room alive (the top demo risk) — in BOTH modes.
+// Real match events still spike it; it only animates rooms with people in them.
+if (config.syntheticCrowd) {
+  const crowd = new SyntheticCrowd(
+    aggregator,
+    () => knownFixtures.map((f) => f.fixtureId),
+    (fixtureId) => roomManager.presence(fixtureId),
+  );
   crowd.start();
   bus.on("match_event", (event) => crowd.onMatchEvent(event));
-  console.log("[pulse] feed mode: SIM (simulated crowd + replay)");
 }
 
 // ---------------------------------------------------------------------------
@@ -109,10 +121,21 @@ io.on("connection", (socket) => {
     socket.join(room(fixtureId));
     roomManager.join(fixtureId, socket.id, team, name);
 
-    // Backfill on join: send current room state immediately so the new tab isn't blank.
+    // Backfill on join so the new tab isn't blank. Use the detector's live score/
+    // phase when present, but always prefer the fixtures-snapshot team names (the
+    // detector may hold "Home/Away" placeholders seeded from an early odds frame).
+    const present = roomManager.presence(fixtureId);
     const state = detector.getRoomState(fixtureId);
-    if (state) {
-      socket.emit("room_state", { ...state, present: roomManager.presence(fixtureId) });
+    const snapshot = knownFixtures.find((x) => x.fixtureId === fixtureId);
+    if (state || snapshot) {
+      socket.emit("room_state", {
+        fixtureId,
+        participants: snapshot?.participants ?? state?.participants ?? ["Home", "Away"],
+        phase: state?.phase ?? snapshot?.phase ?? 1,
+        score: state?.score ?? [0, 0],
+        minute: state?.minute,
+        present,
+      });
     }
   });
 
