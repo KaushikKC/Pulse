@@ -76,10 +76,12 @@ export class ReactionAggregator {
       const present = this.presenceOf(fixtureId);
       const raw = weightedTotal(b.total);
 
-      // Decay previous intensity, then add this window's reaction energy.
+      // Decay previous intensity, then add this window's reaction energy. The
+      // scale is fixed (not presence-relative) so ambient chatter keeps a calm
+      // baseline and only real bursts push toward 1 — goals must FEEL like spikes.
       const prev = this.intensity.get(fixtureId) ?? 0;
-      const reactionEnergy = Math.min(0.6, raw / Math.max(6, present * 2 || 6));
-      const next = clamp01(prev * 0.82 + reactionEnergy);
+      const reactionEnergy = Math.min(0.5, raw / 45);
+      const next = clamp01(prev * 0.8 + reactionEnergy);
       this.intensity.set(fixtureId, next);
 
       this.onState({
