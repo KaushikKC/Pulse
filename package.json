@@ -1,0 +1,21 @@
+{
+  "name": "pulse",
+  "private": true,
+  "version": "0.1.0",
+  "description": "PULSE — a shared live second-screen emotion twin for the World Cup, powered by the TxLINE feed.",
+  "workspaces": [
+    "shared",
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,web -c blue,magenta \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "npm run dev -w @pulse/server",
+    "dev:web": "npm run dev -w @pulse/web",
+    "build": "npm run build -w @pulse/server && npm run build -w @pulse/web",
+    "typecheck": "npm run typecheck -w @pulse/server && npm run typecheck -w @pulse/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
