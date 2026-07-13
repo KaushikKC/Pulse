@@ -1,9 +1,14 @@
 import "dotenv/config";
 
 /**
- * Central config. PULSE runs in two feed modes:
- *  - "sim"  → the built-in simulated crowd / replay feed (default; needs no creds).
- *  - "live" → real TxLINE SSE streams using a TxLINE API token.
+ * Central config. PULSE runs in three feed modes:
+ *  - "sim"    → built-in fabricated matches (default; needs no creds; lively but
+ *               NOT provable — moments are honestly marked "unverified").
+ *  - "replay" → replays a REAL past fixture scripted with its real goals/cards, so
+ *               EVERY captured moment auto-verifies on Solana for real. Needs a
+ *               TxLINE token (setup:txline). The best demo: lively AND provable.
+ *  - "live"   → real TxLINE SSE streams (real-time; empty on devnet as fixtures
+ *               are only scheduled).
  *
  * The architecture's golden rule: ONE backend connection in, MANY out. The mode
  * only changes where score/odds frames originate; everything downstream is identical.
@@ -37,7 +42,7 @@ export const config = {
   port: Number(process.env.PORT ?? 4000),
   corsOrigin: process.env.CORS_ORIGIN ?? "*",
 
-  feedMode: (process.env.FEED_MODE ?? "sim") as "sim" | "live",
+  feedMode: (process.env.FEED_MODE ?? "sim") as "sim" | "replay" | "live",
   network,
 
   txline: {
@@ -68,6 +73,32 @@ export const config = {
 
   /** Reaction aggregation window in ms (doc: ~250ms). */
   aggregationWindowMs: Number(process.env.AGG_WINDOW_MS ?? 250),
+
+  /**
+   * A known real devnet goal used by the "verify a real goal on Solana" demo
+   * button — its Merkle proof validates against a published daily-scores root.
+   * Override to showcase a different fixture.
+   */
+  demoMoment: {
+    fixtureId: process.env.DEMO_FIXTURE_ID ?? "17952170",
+    seq: Number(process.env.DEMO_SEQ ?? 941),
+    statKey: Number(process.env.DEMO_STAT_KEY ?? 1002),
+    home: process.env.DEMO_HOME ?? "Home",
+    away: process.env.DEMO_AWAY ?? "Away",
+  },
+
+  /**
+   * The real fixture the "replay" feed mode plays back. Its milestones carry real
+   * `(seq, statKey)` proof tuples (see replay.ts) discovered from the fixture's
+   * snapshot timeline — every one validates on-chain. Team names default to the
+   * honest "Home"/"Away" (the devnet feed only exposes participant IDs); override
+   * with REPLAY_HOME / REPLAY_AWAY if you know them.
+   */
+  replay: {
+    fixtureId: process.env.REPLAY_FIXTURE_ID ?? "17952170",
+    home: process.env.REPLAY_HOME ?? "Home",
+    away: process.env.REPLAY_AWAY ?? "Away",
+  },
 
   /**
    * Run the synthetic crowd so a room is never dead — even in live mode when the
