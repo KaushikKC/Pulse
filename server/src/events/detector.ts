@@ -147,16 +147,21 @@ class EventDetector {
     intensity: number,
     statKey?: number,
   ): void {
+    // A verified-replay frame carries the REAL (seq, statKey) that proves the
+    // milestone it introduces. Stamp those onto the goal/red-card event so the
+    // captured moment validates on-chain against a genuine TxLINE Merkle proof.
+    const provable = Boolean(frame.proof) && (type === "goal" || type === "red_card");
     const event: MatchEvent = {
       id: randomUUID(),
       fixtureId: frame.fixtureId,
       type,
       team,
-      seq: frame.seq,
-      statKey,
+      seq: provable ? frame.proof!.seq : frame.seq,
+      statKey: provable ? frame.proof!.statKey : statKey,
       minute: frame.minute,
       label,
       intensity,
+      provable: provable || undefined,
       ts: Date.now(),
     };
     bus.emit("match_event", event);
