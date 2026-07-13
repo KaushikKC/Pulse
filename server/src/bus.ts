@@ -1,5 +1,11 @@
 import { EventEmitter } from "node:events";
-import type { MatchEvent, ScoreFrame, OddsFrame, RoomState } from "@pulse/shared";
+import type {
+  MatchEvent,
+  ScoreFrame,
+  OddsFrame,
+  RoomState,
+  VerifiedMoment,
+} from "@pulse/shared";
 
 /**
  * In-memory event bus (the doc's stated MVP choice — swap for Redis pub/sub to
@@ -12,6 +18,8 @@ type BusEvents = {
   match_event: (event: MatchEvent) => void;
   /** Authoritative room/fixture state changes (score, phase, minute). */
   room_state: (state: RoomState) => void;
+  /** A collectible moment was captured (verification may still be pending). */
+  verified_moment: (moment: VerifiedMoment) => void;
 };
 
 class TypedBus {
