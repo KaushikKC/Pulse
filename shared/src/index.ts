@@ -79,6 +79,13 @@ export interface ScoreFrame {
   participants: [string, string];
   /** Match minute if the feed exposes it. */
   minute?: number;
+  /**
+   * Verified-replay only: the REAL feed `(seq, statKey)` that proves the milestone
+   * on this frame (a goal/red-card the frame introduces) against TxLINE's on-chain
+   * Merkle root. When present, the detector stamps the resulting event `provable`
+   * and carries these values through so the captured moment verifies for real.
+   */
+  proof?: { seq: number; statKey: number };
 }
 
 /** Normalized odds frame — implied probabilities for 1 / X / 2. */
@@ -117,6 +124,12 @@ export interface MatchEvent {
   label: string;
   /** 0..1 — how hard the visualization should spike. */
   intensity: number;
+  /**
+   * True when `seq`+`statKey` reference a REAL feed stat that can be proven
+   * on-chain (a live goal or a verified-replay milestone) — as opposed to a
+   * fabricated simulator event. Drives whether the moment attempts verification.
+   */
+  provable?: boolean;
   ts: number;
 }
 
@@ -179,6 +192,66 @@ export interface RoomState {
 }
 
 // ---------------------------------------------------------------------------
+// On-chain verified moments (the "machine truth × human feeling" collectible)
+// ---------------------------------------------------------------------------
+
+/**
+ * The verification state of a captured moment.
+ *  - "verified"   → the underlying stat's Merkle proof was validated on-chain
+ *                   against the TxLINE daily-scores root published on Solana.
+ *  - "unverified" → we captured the emotional moment but could not anchor it
+ *                   (e.g. simulated feed → no real Merkle proof exists).
+ *  - "pending"    → verification is in flight.
+ */
+export type MomentVerification =
+  | {
+      status: "verified";
+      /** The event-stats sub-tree root the proof reproduced (hex). */
+      root: string;
+      /** The daily_scores_roots PDA the root was checked against. */
+      pda: string;
+      /** Epoch-day bucket the root belongs to. */
+      epochDay: number;
+      /** Solana explorer URL for the PDA (network-aware). */
+      explorer: string;
+    }
+  | { status: "unverified"; reason: string }
+  | { status: "pending" };
+
+/**
+ * A snapshotted emotional peak coupled to a real on-pitch event — the thing a
+ * fan can collect. Machine truth (the verified stat) locked to human feeling
+ * (the crowd's intensity) at one instant of the match.
+ */
+export interface VerifiedMoment {
+  id: string;
+  fixtureId: string;
+  participants: [string, string];
+  /** Score [home, away] at the instant of the moment. */
+  score: [number, number];
+  eventType: MatchEventType;
+  team: Side;
+  label: string;
+  minute?: number;
+  /** Feed sequence + stat key used for on-chain validation. */
+  seq: number;
+  statKey?: number;
+  /** Peak fused emotional intensity captured around the event (0..1). */
+  intensity: number;
+  /**
+   * The crowd's emotional-intensity curve sampled around the moment (0..1, oldest
+   * → newest) — the shape of the surge, rendered as a sparkline on the card/poster.
+   */
+  curve?: number[];
+  /** Total reactions the crowd sent during the moment's window, by type. */
+  reactions?: ReactionCounts;
+  /** Chant name of the fan who reacted most during the moment (the "Fan MVP"). */
+  mvp?: string;
+  ts: number;
+  verification: MomentVerification;
+}
+
+// ---------------------------------------------------------------------------
 // Socket.IO event contracts
 // ---------------------------------------------------------------------------
 
@@ -193,7 +266,9 @@ export interface ServerToClient {
   match_event: (event: MatchEvent) => void;
   emotion: (state: EmotionalState) => void;
   /** Echo a single reaction immediately for snappy local feedback / floaters. */
-  reaction_pop: (payload: { type: ReactionType; team: Side }) => void;
+  reaction_pop: (payload: { type: ReactionType; team: Side; name?: string }) => void;
+  /** A collectible moment was captured (and possibly on-chain verified). */
+  verified_moment: (moment: VerifiedMoment) => void;
 }
 
 /** Fixtures available to join (from /api/fixtures/snapshot or the simulator). */
@@ -202,6 +277,9 @@ export interface FixtureSummary {
   participants: [string, string];
   phase: number;
   live: boolean;
+  /** Live score/minute merged in by the server so the lobby cards feel alive. */
+  score?: [number, number];
+  minute?: number;
 }
 
 export const AGGREGATION_WINDOW_MS = 250;
