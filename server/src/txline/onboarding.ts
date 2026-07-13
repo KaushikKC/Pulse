@@ -29,6 +29,7 @@ import {
 } from "@solana/spl-token";
 import nacl from "tweetnacl";
 import { config } from "../config.js";
+import { loadProgram } from "./program.js";
 
 const BASE = config.txline.baseUrl;
 const SERVICE_LEVEL_ID = config.txline.serviceLevelId; // 12 = real-time, free
@@ -72,24 +73,6 @@ export async function getGuestJwt(): Promise<string> {
 // ---------------------------------------------------------------------------
 // Step 2 — subscribe on-chain to the free tier
 // ---------------------------------------------------------------------------
-
-async function loadProgram(provider: anchor.AnchorProvider, programId: PublicKey) {
-  // Prefer the IDL published on-chain (anchor idl init); fall back to a local file.
-  let idl = await anchor.Program.fetchIdl(programId, provider);
-  if (!idl) {
-    try {
-      idl = JSON.parse(readFileSync(new URL("../../idl/txline.json", import.meta.url), "utf8"));
-    } catch {
-      throw new Error(
-        `Could not fetch the TxLINE IDL on-chain for ${programId.toBase58()} and no ` +
-          `local server/idl/txline.json present. Drop the program IDL there and re-run.`,
-      );
-    }
-  }
-  // Ensure the address is set so anchor 0.30 resolves the program id.
-  (idl as any).address = programId.toBase58();
-  return new anchor.Program(idl as anchor.Idl, provider);
-}
 
 export async function subscribe(keypair: Keypair): Promise<string> {
   const connection = new Connection(config.solana.rpc, "confirmed");
