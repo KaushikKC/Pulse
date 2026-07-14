@@ -39,6 +39,10 @@ export class RoomManager {
     return this.rooms.get(fixtureId)?.get(socketId)?.team ?? 0;
   }
 
+  nameOf(fixtureId: string, socketId: string): string | undefined {
+    return this.rooms.get(fixtureId)?.get(socketId)?.name;
+  }
+
   presence(fixtureId: string): number {
     return this.rooms.get(fixtureId)?.size ?? 0;
   }
