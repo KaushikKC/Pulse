@@ -6,9 +6,20 @@ import type {
   ReactionType,
   RoomState,
   Side,
+  VerifiedMoment,
 } from "@pulse/shared";
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? "http://localhost:4000";
+
+/** One sample of the room's emotional heartbeat, for the scrubbable timeline. */
+export interface TimelinePoint {
+  t: number;
+  i: number;
+  tilt: number;
+}
+
+/** How many heartbeat samples to retain (~7.5 min at 4/sec). */
+const TIMELINE_CAP = 1800;
 
 export interface PulseState {
   connected: boolean;
@@ -18,13 +29,17 @@ export interface PulseState {
   events: MatchEvent[];
   /** The single newest event, for one-shot canvas spikes. */
   lastEvent: MatchEvent | null;
+  /** Collectible moments captured this session (newest first). */
+  moments: VerifiedMoment[];
+  /** The match's emotional intensity history (oldest → newest), for the scrub. */
+  timeline: TimelinePoint[];
 }
 
 /**
  * usePulse — the client's single connection to the fan-out service. Joins a room,
  * streams match events + the fused emotional heartbeat, and sends reactions.
  */
-export function usePulse(fixtureId: string | null, team: Side) {
+export function usePulse(fixtureId: string | null, team: Side, name?: string) {
   const socketRef = useRef<Socket | null>(null);
   const [state, setState] = useState<PulseState>({
     connected: false,
@@ -32,9 +47,13 @@ export function usePulse(fixtureId: string | null, team: Side) {
     emotion: null,
     events: [],
     lastEvent: null,
+    moments: [],
+    timeline: [],
   });
   /** Local floaters echoed instantly on every reaction (yours + others'). */
-  const [pops, setPops] = useState<{ id: number; type: ReactionType; team: Side }[]>([]);
+  const [pops, setPops] = useState<
+    { id: number; type: ReactionType; team: Side; name?: string }[]
+  >([]);
   const popId = useRef(0);
 
   // Connect once.
@@ -46,7 +65,14 @@ export function usePulse(fixtureId: string | null, team: Side) {
     socket.on("disconnect", () => setState((s) => ({ ...s, connected: false })));
 
     socket.on("room_state", (room: RoomState) => setState((s) => ({ ...s, room })));
-    socket.on("emotion", (emotion: EmotionalState) => setState((s) => ({ ...s, emotion })));
+    socket.on("emotion", (emotion: EmotionalState) =>
+      setState((s) => {
+        const point: TimelinePoint = { t: emotion.ts, i: emotion.intensity, tilt: emotion.tilt };
+        const timeline = [...s.timeline, point];
+        if (timeline.length > TIMELINE_CAP) timeline.splice(0, timeline.length - TIMELINE_CAP);
+        return { ...s, emotion, timeline };
+      }),
+    );
     socket.on("match_event", (event: MatchEvent) =>
       setState((s) => ({
         ...s,
@@ -54,9 +80,17 @@ export function usePulse(fixtureId: string | null, team: Side) {
         events: [event, ...s.events].slice(0, 12),
       })),
     );
-    socket.on("reaction_pop", ({ type, team }) => {
+    // Moments stream in as "pending" then re-arrive "verified"/"unverified";
+    // upsert by id so the card updates in place rather than duplicating.
+    socket.on("verified_moment", (moment: VerifiedMoment) =>
+      setState((s) => {
+        const rest = s.moments.filter((m) => m.id !== moment.id);
+        return { ...s, moments: [moment, ...rest].slice(0, 24) };
+      }),
+    );
+    socket.on("reaction_pop", ({ type, team, name }) => {
       const id = popId.current++;
-      setPops((p) => [...p, { id, type, team }].slice(-40));
+      setPops((p) => [...p, { id, type, team, name }].slice(-40));
       setTimeout(() => setPops((p) => p.filter((x) => x.id !== id)), 1600);
     });
 
@@ -69,11 +103,11 @@ export function usePulse(fixtureId: string | null, team: Side) {
   useEffect(() => {
     const socket = socketRef.current;
     if (!socket || !fixtureId) return;
-    socket.emit("join", { fixtureId, team });
+    socket.emit("join", { fixtureId, team, name: name || undefined });
     return () => {
       socket.emit("leave", { fixtureId });
     };
-  }, [fixtureId, team]);
+  }, [fixtureId, team, name]);
 
   const react = useCallback(
     (type: ReactionType) => {
