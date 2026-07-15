@@ -4,6 +4,8 @@ interface Pop {
   id: number;
   type: ReactionType;
   team: Side;
+  /** The fan's chant name — floats up with their emoji. */
+  name?: string;
 }
 
 /**
@@ -22,7 +24,8 @@ export function Floaters({ pops }: { pops: Pop[] }) {
             color: REACTION_META[p.type].color,
           }}
         >
-          {REACTION_META[p.type].emoji}
+          <span className="floater-emoji">{REACTION_META[p.type].emoji}</span>
+          {p.name && <span className="floater-name">{p.name}</span>}
         </span>
       ))}
     </div>
