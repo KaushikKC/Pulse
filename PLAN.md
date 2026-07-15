@@ -1,6 +1,6 @@
 # PULSE — Product Plan, Goals & Build Status
 
-**Last updated:** 2026-06-28
+**Last updated:** 2026-07-14
 **Track:** Consumer & Fan Experiences — TxODDS World Cup Hackathon (Solana)
 **Repo:** `WorldCup-Hackathon/Pulse/` · Architecture spec: `PULSE_architecture.md`
 
@@ -204,83 +204,117 @@ codebase right now:
 **Run it today:** `npm install && npm run dev` → http://localhost:5173 (no credentials).
 Open two tabs to feel two fans fuse into one canvas.
 
-**Mapping to stages:** Stage 1 ✅ · Stage 2 ✅ · Stage 4 simulated-crowd ✅ (polish partial).
+### Added 2026-07-14 (design pass + depth + the coherence fix)
+- ✅ **Verified Replay** (`FEED_MODE=replay`, `server/src/txline/replay.ts`) — the
+  fix for the "two disconnected worlds" problem (lively-but-fake sim goals vs one
+  hardcoded real verifiable goal). Replays REAL fixture 17952170 (a genuine 1–1
+  draw) scripted with its real milestones, each carrying a real `(seq, statKey)`
+  proof tuple, so **every captured moment auto-verifies on Solana**. Verified live:
+  a full loop → **3 moments, all 3 verified, 0 unverified**. Mechanics:
+  `ScoreFrame.proof` → detector stamps goal/red events `provable` → `momentService`
+  verifies on `provable || live`. `full_time` dropped from minted moments (it's a
+  phase, no provable stat) so the rail is 100% verified. **This is now the best demo
+  path — lively AND provable.** Real tuples: `(260,1002)` away goal, `(653,3006)`
+  away red, `(687,3001)` home equaliser.
+- ✅ **Multi-fixture sim** — 3 concurrent, time-offset scripted matches; the lobby is
+  a real matchday card picker with live ticking scores.
+- ✅ **Shareable room links** — `?join=<fixtureId>` deep link + ⚡ Invite (copy link).
+- ✅ **Usernames** — optional chant name, persisted, floats up with your reactions.
+- ✅ **Live presence** — count updates the instant someone joins/leaves.
+- ✅ **UI redesign — stadium-night broadcast look** — Bebas Neue TV score bug,
+  matchday lobby with pitch markings, glassy per-emotion reaction pads, lower-third
+  ticker.
+- ✅ **Per-emotion canvas signatures** — 🔥 hype embers · 🤬 rage shards · 😱 panic
+  jitter · 🎉 cheer orbs, plus goal confetti cannons, floodlight sweeps, film grain.
+
+**Mapping to stages:** Stage 1 ✅ · Stage 2 ✅ · Stage 3 ✅ (on-chain verified moments,
+live on devnet; **Verified Replay** makes every watched moment provable) · Stage 4
+simulated-crowd ✅ + visual polish ✅.
 
 ---
 
-## 7. What is STILL PENDING (⏳ / ⛔)
+## 7. What is STILL PENDING
 
-### A. Live TxLINE access (Stage 0) — ⛔ blocked on credentials
-- [ ] Solana wallet + subscribe to **Service Level 12** (World Cup + Int Friendlies, real-time).
-- [ ] `POST /auth/guest/start` → guest JWT.
-- [ ] `POST /api/token/activate` → API token.
-- [ ] Put `FEED_MODE=live` + token/JWT in `server/.env`; confirm real frame shapes and
-      adjust `mapScore`/`mapOdds` in `ingest.ts` to match.
-- [ ] Wire `GET /api/fixtures/snapshot` for the real match list and
-      `GET /api/scores/snapshot/{fixtureId}` for backfill on join.
-- **Why pending:** needs a funded Solana wallet + the on-chain subscription. Code path
-  is built and waiting; this is an access/ops step, not a coding one.
+**The product is feature-complete.** Everything in the architecture is built and
+verified end-to-end (emotion twin, rooms, on-chain moments, Verified Replay, the
+redesign, and all the depth add-ons). What remains is the **submission / ops layer,
+not code.** Four hard-requirement blockers, then optional polish.
 
-### B. On-chain Verified Moments (Stage 3) — ⏳ not started (deliberately last)
-- [ ] Peak detector: emotional-intensity peak coinciding with a real MatchEvent → snapshot.
-- [ ] `GET /api/scores/stat-validation?fixtureId=&seq=&statKey=` → Merkle proof.
-- [ ] On-chain `validateStat` view call against daily Merkle roots on Solana.
-- [ ] Anchor/collect the moment (mint or record) so it's a verifiable collectible.
-- [ ] "Moment" card UI: verification badge + shareable image (canvas snapshot + score + proof).
-- **Why pending:** the architecture says build this LAST — the product is complete and
-  original without it if time runs short. It's the differentiator, not the foundation.
+### 🚨 Blockers (must clear to submit)
 
-### C. Multi-fixture & room depth (Stage 2 polish) — ⏳ partial
-- [ ] More than one concurrent fixture (sim currently runs one match).
-- [ ] Named rooms / shareable room links / invite a friend flow.
-- [ ] Optional usernames / avatars in presence.
-- [ ] Historical replay mode via `GET /api/scores/historical/{fixtureId}` for demo recording.
+**1. Commit + push the code / public repo — ⛔ not done**
+- [ ] The whole build is **uncommitted** (18 modified + 8 untracked files — the entire
+      on-chain moments layer, Verified Replay, and the full redesign). Public-repo
+      requirement can't be met until this is pushed. *Only chore, not code.*
 
-### D. Visualization polish (Stage 1/4 — the biggest scored lever) — ⏳ ongoing
-- [ ] WebGL/shader upgrade option for richer fluid motion (current 2D canvas is solid baseline).
-- [ ] Per-emotion visual signatures (rage = jagged red ruptures, hype = rising embers, etc.).
-- [ ] "Moment replay" — scrub the emotional timeline of the match.
-- [ ] Premium visual themes (a monetization hook).
+**2. Deploy to live public URLs — ⛔ not started (only blocker needing real setup)**
+- [ ] Backend → Railway / Render / Fly; web → Vercel. Judges need a working URL
+      (auto-DQ risk otherwise). Set `VITE_SERVER_URL` on the web build + `CORS_ORIGIN`
+      on the server.
 
-### E. Production hardening & deploy (Stage 4/5) — ⏳ not started
-- [ ] Deploy backend (Railway/Render/Fly) + web (Vercel) to **live public URLs** (hard requirement).
-- [ ] Swap in-memory bus → Redis pub/sub if scaling for many concurrent rooms.
-- [ ] Reconnection hardening end-to-end; pre-recorded fallback clip ready.
-- [ ] Load-test the aggregator/fan-out under a real crowd.
+**3. Demo video (≤5 min) — ⛔ not recorded**
+- [ ] Script exists (`DEMO_SCRIPT.md`) but still points at **sim** mode — update it to
+      the stronger **replay** flow (every moment verifies on camera), then record:
+      problem → live walkthrough → how TxLINE powers the backend.
 
-### F. Submission package (Stage 5) — ⏳ not started
-- [ ] Demo video (≤5 min): problem → live walkthrough → how TxLINE powers the backend.
-- [ ] Public repo cleanup + technical docs (core idea, highlights, **list of TxLINE endpoints used**).
-- [ ] Written feedback on the TxLINE API experience.
+**4. TxLINE API feedback note — ⏳ partial**
+- [ ] Gotchas currently live *inside* the README, not as the **standalone deliverable**
+      the submission asks for. Extract them: IDL missing `validate_stat` `returns`;
+      proof hashes as byte-arrays not hex; snake_case anchor args; `.view()` fee-payer
+      must exist; devnet SL1-only + empty live SSE + empty historical.
+
+> That's it for blockers — **4 things, and only #2 involves real setup work**; the rest
+> is writing/committing.
+
+### ⏳ Optional polish (additive — skip unless time before recording)
+- [ ] **Real team names** for the replay fixture (currently the honest "Home/Away"; the
+      devnet feed only exposes participant IDs 2999 / 1776). Set `REPLAY_HOME`/`REPLAY_AWAY`.
+- [ ] **Richer moment card** — emotional peak curve + reaction breakdown + "Fan MVP".
+- [ ] **Moment / emotional-timeline scrub**; **premium visual themes** (monetization hooks).
+- [ ] **WebGL/shader upgrade** — *deliberately skipped*; the 2D canvas is already the safe,
+      beautiful baseline and a rewrite this close to recording is pure demo risk.
+- [ ] **Reconnection hardening + Redis pub/sub** — only matters at real scale; in-memory
+      bus + current backoff are fine for the demo.
 - [ ] Confirm exact prize per-place split with sponsor (source doc is inconsistent).
+
+### ✅ Cleared since the last plan (were pending, now done)
+- On-chain Verified Moments (Stage 3) — built & verified live on devnet 2026-07-08.
+- Live TxLINE access — token in `server/.env`; real fixtures snapshot wired; `replay`
+  mode discovers + proves real goals. (Devnet reality: SL1-only, live SSE + historical
+  empty — so **replay** is the provable demo path, not live.)
+- Multi-fixture, shareable room links, usernames, live presence, per-emotion visual
+  signatures — all shipped 2026-07-14 (see §6).
 
 ---
 
 ## 8. Submission checklist (hard requirements — auto-DQ if missed)
 
-- [ ] Working **live** product (mainnet or devnet) — not a mockup
-- [ ] Uses TxLINE data as a **live input**
-- [ ] Sign up through **Solana**
-- [x] **Public repo** structure ready (needs to be pushed/made public)
-- [ ] **Demo video** (≤5 min)
-- [ ] Working deployed URL OR functional API endpoint for judges
-- [ ] Brief technical docs incl. list of TxLINE endpoints used
-- [ ] Feedback on the TxLINE API experience
+- [x] Working **live** product (devnet) — end-to-end, not a mockup
+- [x] Uses TxLINE data as a **live input** — real fixtures snapshot + live on-chain
+      stat-validation Merkle proofs; **Verified Replay** proves real goals per moment
+- [x] Sign up through **Solana** — on-chain subscribe + token activation on devnet
+- [ ] **Public repo** — ⛔ code is uncommitted; commit + push (Blocker 1)
+- [ ] **Demo video** (≤5 min) — ⛔ not recorded (Blocker 3)
+- [ ] Working deployed URL OR functional API endpoint for judges — ⛔ not deployed (Blocker 2)
+- [x] Brief technical docs incl. list of TxLINE endpoints used (README)
+- [ ] Feedback on the TxLINE API experience — ⏳ in README, needs standalone note (Blocker 4)
 - [ ] Team ≤ 3 members, eligible via Superteam Earn
 
 ---
 
 ## 9. Recommended next moves (in order)
 
-1. **Get live TxLINE access** (Section A) — it's the only blocker on the "live input"
-   hard requirement, and it's ops not code. Do this in parallel with everything else.
-2. **Deploy the current build to live URLs** (Section E) — we already have a complete,
-   demoable product; getting it on a public URL de-risks the submission early.
-3. **Multi-fixture + shareable rooms** (Section C) — makes the "together" story real.
-4. **Visualization polish** (Section D) — the single biggest scored differentiator.
-5. **On-chain verified moments** (Section B) — the originality crown, built last.
-6. **Record the demo + submission package** (Section F).
+Feature work is done; these are the four blockers, ordered to de-risk fastest.
 
-> **Risk reminder:** the product is already a complete, original experience through
-> Stage 2. Everything pending is additive. If time runs out, we still have something
-> beautiful, live, and demoable — which is exactly how the architecture sequenced it.
+1. **Commit + push the code** (Blocker 1) — makes the repo public and real. ~minutes.
+2. **Deploy to live URLs** (Blocker 2) — the only item needing real setup; backend on
+   Railway/Render + web on Vercel. Do early to de-risk the submission.
+3. **Update `DEMO_SCRIPT.md` to replay mode + record the video** (Blocker 3).
+4. **Extract the TxLINE API feedback note** (Blocker 4) — pull the gotchas out of the
+   README into a standalone note.
+
+Then, only if time remains, cherry-pick from the optional-polish list (§7).
+
+> **Risk reminder:** the product is already a complete, original, verified experience —
+> lively AND provable via Verified Replay. Everything pending is submission/ops, not
+> code. If time runs out mid-polish, what ships is still beautiful, live, and demoable.

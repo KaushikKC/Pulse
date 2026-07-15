@@ -23,10 +23,42 @@ TxLINE SSE  ─▶  ingest  ─▶  event detector  ─▶  in-memory bus  ─�
 - **Reaction aggregator** fuses taps in 250 ms windows into one "emotional state" per room.
 - **The hero canvas** breathes when quiet, splits home/away by supporter, and erupts in shockwaves on a real goal.
 - **Simulated crowd mode** (default) replays a dramatic match + synthetic reactions, so the demo always looks alive with no live fixture.
+- **On-chain verified moments** — the biggest emotional peaks are snapshotted as collectible
+  "moments" and cryptographically verified on **Solana devnet**: PULSE fetches the stat's
+  Merkle proof from TxLINE and validates it against the published `daily_scores_roots` root
+  via the program's `validate_stat` view. Verified moments render as a shareable poster with
+  a "✓ Verified on Solana" badge and an explorer link. *Confirmed live: a real goal proof
+  returns `valid:true`; a tampered proof is rejected.*
 
-Still to come (per the build plan): the on-chain "verified moments" layer
-(`/api/scores/stat-validation` → Solana `validateStat`), and the live TxLINE
-subscription via Solana Service Level 12.
+### On-chain verified moments — how it works
+
+```
+milestone event (goal/red/full-time)          GET /api/scores/stat-validation
+        │  peak intensity snapshot                    │  Merkle proof (byte-array nodes)
+        ▼                                             ▼
+  momentService.ts  ───────────────────▶  validation.ts  ──▶  program.validate_stat(...).view()
+        │  emit verified_moment                              against daily_scores_roots PDA on Solana
+        ▼
+  Socket.IO ─▶ MomentCard (shareable poster + ✓ Verified badge + explorer link)
+```
+
+- The `.view()` is a read-only simulation — **no funded wallet or signature needed** to verify
+  (simulation reuses the subscribe wallet as the fee payer, since the payer must exist on-chain).
+- Try it without a live goal: `GET /api/moments/demo`, or the **"⛓ Verify a real goal on-chain"**
+  button in the app — both verify a known real devnet goal end-to-end.
+
+**Implementation notes / TxLINE API feedback (from getting this working on devnet):**
+- The published IDL omits `validate_stat`'s `returns` type, so anchor won't build a `.view()`
+  for it — we patch `returns: "bool"` into the IDL in memory (`program.ts`).
+- The `stat-validation` response returns hashes as **byte arrays** (not the hex the docs
+  example implies) and `statToProve` as an object `{ key, value, period }`.
+- Anchor 0.30 encodes struct args by their **snake_case** IDL field names.
+- `import * as anchor` does **not** surface anchor's re-exported `BN` under tsx/esbuild — use
+  the default import (`import anchor from "@coral-xyz/anchor"; const { BN } = anchor`).
+
+Still to come (per the build plan): deploy to a public URL and record the demo video. The
+live SSE scores stream is empty on devnet (fixtures are scheduled), so goal-driven auto-moments
+show best in simulated mode; the on-chain verification runs against real devnet proofs.
 
 ## Run it
 
@@ -72,16 +104,27 @@ The flow (from the TxLINE World Cup docs):
 | Path | What |
 | --- | --- |
 | `shared/` | Protocol types + constants shared by server and web (single source of truth) |
-| `server/` | Ingest, event detector, in-memory bus, Socket.IO fan-out, reaction aggregator, simulator |
-| `web/` | React + 2D-canvas client — the living visualization, reaction bar, event ticker |
+| `server/` | Ingest, event detector, in-memory bus, Socket.IO fan-out, reaction aggregator, simulator, **moments (on-chain verification)** |
+| `web/` | React + 2D-canvas client — the living visualization, reaction bar, event ticker, **moment cards** |
 
-## TxLINE endpoints (planned/used)
+## PULSE HTTP endpoints (for judges)
 
 | Purpose | Endpoint |
 | --- | --- |
+| Health / status | `GET /health` |
+| Joinable fixtures | `GET /api/fixtures` |
+| Verify a specific stat on-chain | `POST /api/moments/verify` `{ fixtureId, seq, statKey }` |
+| Verify the demo real goal on-chain | `GET /api/moments/demo` |
+
+## TxLINE endpoints used
+
+| Purpose | Endpoint |
+| --- | --- |
+| Guest auth | `POST /auth/guest/start` |
+| Token activation | `POST /api/token/activate` |
+| Match list | `GET /api/fixtures/snapshot` |
 | Live scores | `GET /api/scores/stream` (SSE) |
 | Live odds | `GET /api/odds/stream` (SSE) |
-| Match list | `GET /api/fixtures/snapshot` |
-| Backfill on join | `GET /api/scores/snapshot/{fixtureId}` |
-| Historical replay | `GET /api/scores/historical/{fixtureId}` |
-| Moment proof | `GET /api/scores/stat-validation?fixtureId=&seq=&statKey=` |
+| **Moment proof (verified moments)** | `GET /api/scores/stat-validation?fixtureId=&seq=&statKey=` |
+| On-chain subscribe | `program.subscribe(...)` (devnet program `6pW64…wyP2J`) |
+| On-chain validate | `program.validate_stat(...).view()` vs `daily_scores_roots` PDA |
